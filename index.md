@@ -1,4 +1,4 @@
-# Cosgun's Journal
+# Ahmet Cosgun Progress Journal
 
 ## Week 0 ( September 19)
 
