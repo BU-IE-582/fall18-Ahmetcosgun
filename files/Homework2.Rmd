@@ -1,0 +1,440 @@
+---
+title: "HW2"
+author: "AhmetCosgun"
+date: "October 25, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Task 1 a
+
+```{r,include=FALSE,eval=TRUE}
+library(data.table)
+library(anytime)
+```
+
+**Read data from rds files, get unique instances, include selected bet types="1x2","bts","ha","ou","dc", only work with initial odd**
+```{r}
+matchdata<-readRDS('C:\\Users\\10025\\Desktop\\IE582\\hw2/df9b1196-e3cf-4cc7-9159-f236fe738215_matches.rds', refhook = NULL)
+odddata<-data.table(readRDS('C:\\Users\\10025\\Desktop\\IE582\\hw2/df9b1196-e3cf-4cc7-9159-f236fe738215_odd_details.rds', refhook = NULL))
+matchdata=matchdata[complete.cases(matchdata)]
+matchdata<-unique(matchdata)
+
+odddata<- odddata[betType %in% c("1x2","bts","ha","ou","dc")]
+
+odddata=odddata[order(matchId, oddtype,bookmaker,date)]
+
+odddata_initial=odddata[,list(start_odd=odd[1]),
+                                  by=list(matchId,oddtype,bookmaker,totalhandicap)]
+
+```
+**Select 5 bookmakers, and combined them into one dataset**
+```{r}
+odddata_initial_10Bet<-odddata_initial[bookmaker=="10Bet"]
+wide_odds_initial_10Bet=dcast(odddata_initial_10Bet,
+                        matchId~oddtype+totalhandicap,
+                        value.var='start_odd')
+
+odddata_initial_bet365<-odddata_initial[bookmaker=="bet365"]
+wide_odds_initial_bet365=dcast(odddata_initial_bet365,
+                              matchId~oddtype+totalhandicap,
+                              value.var='start_odd')
+
+odddata_initial_BetfairExchange<-odddata_initial[bookmaker=="Betfair Exchange"]
+wide_odds_initial_BetfairExchange=dcast(odddata_initial_BetfairExchange,
+                              matchId~oddtype+totalhandicap,
+                              value.var='start_odd')
+
+odddata_initial_bwin<-odddata_initial[bookmaker=="bwin"]
+wide_odds_initial_bwin=dcast(odddata_initial_bwin,
+                              matchId~oddtype+totalhandicap,
+                              value.var='start_odd')
+
+odddata_initial_Betsson<-odddata_initial[bookmaker=="Betsson"]
+wide_odds_initial_Betsson=dcast(odddata_initial_Betsson,
+                              matchId~oddtype+totalhandicap,
+                              value.var='start_odd')
+
+m <- rbind(wide_odds_initial_10Bet, wide_odds_initial_bet365,wide_odds_initial_BetfairExchange,wide_odds_initial_bwin,wide_odds_initial_Betsson, fill=TRUE)
+```
+**For combined dataset**
+```{r}
+z<-merge(x = matchdata, y = m, by = "matchId", all = TRUE,allow.cartesian=TRUE)
+
+z<-setDT(z)[, paste0("score", 1:2) := tstrsplit(score, ":")]
+
+z[,72]<-as.numeric(unlist(z[,72]))
+z[,73]<-as.numeric(unlist(z[,73]))
+z$totalscore<-z$score1+z$score2 
+z$ou<-ifelse(z[,74]<2.5,"1","2")
+z[,75]<-as.numeric(unlist(z[,75]))
+
+data<-z[,-c(1:7)]
+data_ou25<-data[!(is.na(data$over_2.5) | data$over_2.5==""), ]
+asdas<-data_ou25[,c("over_0.5","over_0.75", "over_1", "over_1.75", "over_10", "over_10.5", "over_11", "over_11.5", "over_2", "over_2.25", "over_2.29", "over_2.75", "over_3", "over_3.25", "over_3.75", "over_4", "over_4.25", "over_4.5", "over_5","over_5.25","over_5.5","over_6.5","over_7.5", "over_8.5"):=NULL] 
+asdas<-asdas[,c("under_0.5","under_0.75", "under_1", "under_1.75", "under_10", "under_10.5", "under_11", "under_11.5", "under_2", "under_2.25", "under_2.29", "under_2.75", "under_3", "under_3.25", "under_3.75", "under_4", "under_4.25", "under_4.5", "under_5","under_5.25","under_5.5","under_6.5","under_7.5", "under_8.5"):=NULL]
+
+pat=asdas[complete.cases(asdas)]
+dat<-pat[,-c(17:20)]
+ress<-pat[,c(20)]
+a<-as.numeric(unlist(ress[,1]))
+
+pc <- princomp(dat)
+plot(pc)
+summary(pc, loadings=T)
+# Get principal component vectors using prcomp instead of princomp
+pc = prcomp(dat,center = TRUE,scale = TRUE) 
+
+# First 7 principal components
+comp <- data.frame(pc$x[,1:7])
+# Plot
+plot(comp, pch=16, col=a, main="Graph of Different PCs in 2-D")
+
+```
+```{r,include=FALSE,eval=TRUE}
+library(factoextra)
+```
+```{r}
+ind <- get_pca_ind(pc)
+f<-ind$coord
+
+##eigenvalues
+eig.val <- get_eigenvalue(pc)
+eig.val
+fviz_eig(pc)
+##graph of indiviudals
+fviz_pca_ind(pc,
+             #col.ind = "cos2", # Color by the quality of representation
+             col.ind = a, # Color by the quality of representation
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07")
+)
+##graph of variables
+fviz_pca_var(pc,
+             col.var = "contrib", # Color by contributions to the PC
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE     # Avoid text overlapping
+)
+##graph combined
+fviz_pca_biplot(pc, #repel = TRUE,
+                col.var = "#2E9FDF", # Variables color
+                col.ind = a
+)
+
+```
+**For only 1 bookmaker**
+```{r}
+z1<-merge(x = matchdata, y = wide_odds_initial_10Bet, by = "matchId", all = TRUE,allow.cartesian=TRUE)
+
+z1<-setDT(z1)[, paste0("score", 1:2) := tstrsplit(score, ":")]
+
+z1[,70]<-as.numeric(unlist(z1[,70]))
+z1[,71]<-as.numeric(unlist(z1[,71]))
+z1$totalscore<-z1$score1+z1$score2 
+z1$ou<-ifelse(z1[,72]<2.5,"1","2")
+z1[,73]<-as.numeric(unlist(z1[,73]))
+
+data1<-z1[,-c(1:7)]
+data1_ou25<-data1[!(is.na(data1$over_2.5) | data1$over_2.5==""), ]
+asdas1<-data1_ou25[,c("over_0.5","over_0.75", "over_1", "over_1.75", "over_10", "over_10.5", "over_11", "over_11.5", "over_2", "over_2.25", "over_2.29", "over_2.75", "over_3", "over_3.25", "over_3.75", "over_4", "over_4.25", "over_4.5", "over_5","over_5.25","over_5.5","over_6.5","over_7.5"):=NULL] 
+asdas1<-asdas1[,c("under_0.5","under_0.75", "under_1", "under_1.75", "under_10", "under_10.5", "under_11", "under_11.5", "under_2", "under_2.25", "under_2.29", "under_2.75", "under_3", "under_3.25", "under_3.75", "under_4", "under_4.25", "under_4.5", "under_5","under_5.25","under_5.5","under_6.5","under_7.5"):=NULL]
+
+pat1=asdas1[complete.cases(asdas1)]
+dat1<-pat1[,-c(17:20)]
+ress1<-pat1[,c(20)]
+a1<-as.numeric(unlist(ress1[,1]))
+
+pc1 <- princomp(dat1)
+plot(pc1)
+summary(pc1, loadings=T)
+# Get principal component vectors using prcomp instead of princomp
+pc1 = prcomp(dat1,center = TRUE,scale = TRUE) 
+
+# First 7 principal components
+comp1 <- data.frame(pc1$x[,1:7])
+# Plot
+plot(comp1, pch=16, col=a1, main="Graph of Different PCs in 2-D")
+
+```
+```{r,include=FALSE,eval=TRUE}
+library(factoextra)
+```
+```{r}
+ind1 <- get_pca_ind(pc1)
+f1<-ind1$coord
+
+##eigenvalues
+eig.val1 <- get_eigenvalue(pc1)
+eig.val1
+fviz_eig(pc1)
+##graph of indiviudals
+fviz_pca_ind(pc1,
+             #col.ind = "cos2", # Color by the quality of representation
+             col.ind = a1, # Color by the quality of representation
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07")
+             #repel = TRUE     # Avoid text overlapping
+)
+##graph of variables
+fviz_pca_var(pc1,
+             col.var = "contrib", # Color by contributions to the PC
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE     # Avoid text overlapping
+)
+##graph combined
+fviz_pca_biplot(pc1, #repel = TRUE,
+                col.var = "#2E9FDF", # Variables color
+                col.ind = a1
+                # col.ind = "#696969"  # Individuals color
+)
+```
+##Task 2
+
+```{r}
+z$totalscore<-z$score1+z$score2 
+z$ou<-ifelse(z$score1==z$score2,"1",ifelse(z$score1>z$score2,"2","3"))
+z1x2<-z
+z1x2[,75]<-as.numeric(unlist(z1x2[,75]))
+
+data1x2<-z1x2[,-c(1:7)]
+
+data_1x2<-data1x2[!(is.na(data$odd1_NA) | data$odd1_NA==""), ]
+asdas1x2<-data_1x2[,c("over_0.5","over_0.75", "over_1", "over_1.75", "over_10", "over_10.5", "over_11", "over_11.5", "over_2", "over_2.25", "over_2.29", "over_2.75", "over_3", "over_3.25", "over_3.75", "over_4", "over_4.25", "over_4.5", "over_5","over_5.25","over_5.5","over_6.5","over_7.5", "over_8.5"):=NULL] 
+asdas1x2<-asdas1x2[,c("under_0.5","under_0.75", "under_1", "under_1.75", "under_10", "under_10.5", "under_11", "under_11.5", "under_2", "under_2.25", "under_2.29", "under_2.75", "under_3", "under_3.25", "under_3.75", "under_4", "under_4.25", "under_4.5", "under_5","under_5.25","under_5.5","under_6.5","under_7.5", "under_8.5"):=NULL]
+
+pat1x2=asdas1x2[complete.cases(asdas1x2)]
+dat1x2<-pat1x2[,-c(17:20)]
+ress1x2<-pat1x2[,c(20)]
+a1x2<-as.numeric(unlist(ress1x2[,1]))
+
+pc1x2 <- princomp(dat1x2)
+plot(pc1x2)
+summary(pc1x2, loadings=T)
+# Get principal component vectors using prcomp instead of princomp
+pc1x2 = prcomp(dat1x2,center = TRUE,scale = TRUE) 
+
+# First 7 principal components
+comp1x2 <- data.frame(pc1x2$x[,1:7])
+# Plot
+plot(comp1x2, pch=16, col=a1x2, main="Graph of Different PCs in 2-D")
+```
+```{r,include=FALSE,eval=TRUE}
+library(factoextra)
+```
+```{r}
+ind1x2 <- get_pca_ind(pc1x2)
+f1x2<-ind1x2$coord
+
+##eigenvalues
+eig.val1x2 <- get_eigenvalue(pc1x2)
+eig.val1x2
+fviz_eig(pc1x2)
+##graph of indiviudals
+fviz_pca_ind(pc1x2,
+             #col.ind = "cos2", # Color by the quality of representation
+             col.ind = a1x2, # Color by the quality of representation
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07")
+             #repel = TRUE     # Avoid text overlapping
+)
+##graph of variables
+fviz_pca_var(pc1x2,
+             col.var = "contrib", # Color by contributions to the PC
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE     # Avoid text overlapping
+)
+##graph combined
+fviz_pca_biplot(pc1x2, #repel = TRUE,
+                col.var = "#2E9FDF", # Variables color
+                col.ind = a1x2
+                # col.ind = "#696969"  # Individuals color
+)
+
+```
+###Task 3
+
+```{r,include=FALSE,eval=TRUE}
+library(jpeg)
+```
+```{r}
+rawimage<-readJPEG('C:\\Users\\10025\\Desktop\\IE582\\hw2/hw2_image1.jpeg')
+
+str(rawimage)
+```
+```{r,include=FALSE,eval=TRUE}
+library(graphics)
+```
+```{r}
+plot(c(0, 512), c(0, 512), type = "n", xlab = "pixels", ylab = "pixels")
+rasterImage(rawimage, 0, 0, 512, 512,
+            angle = 0, interpolate = TRUE)
+
+red<-rawimage[,,1]
+green<-rawimage[,,2]
+blue<-rawimage[,,3]
+
+
+par(mfrow=c(1,3))
+image(t(red[nrow(red):1L,]),main="RED")
+image(t(green[nrow(green):1L,]),main="GREEN")
+image(t(blue[nrow(blue):1L,]),main="BLUE")
+
+noise_1<-matrix(runif(512*512,min = 0,max = 0.1),512,512)
+noise_2<-matrix(runif(512*512,min = 0,max = 0.1),512,512)
+noise_3<-matrix(runif(512*512,min = 0,max = 0.1),512,512)
+
+noised_image<-array(0,c(512,512,3))
+noised_image[,,1]<-red_noise<-red+noise_1
+noised_image[,,2]<-green_noise<-green+noise_2
+noised_image[,,3]<-blue_noise<-blue+noise_3
+
+noised_image[,,1]<-ifelse(noised_image[,,1]>1,1,noised_image[,,1])
+noised_image[,,2]<-ifelse(noised_image[,,2]>1,1,noised_image[,,2])
+noised_image[,,3]<-ifelse(noised_image[,,3]>1,1,noised_image[,,3])
+
+par(mfrow=c(1,2))
+plot(c(0, 512), c(0, 512), type = "n",main="original image", xlab = "", ylab = "")
+rasterImage(rawimage, 0, 0, 512, 512,
+            angle = 0, interpolate = TRUE)
+plot(c(0, 512), c(0, 512), type = "n",main="noised image", xlab = "", ylab = "")
+rasterImage(noised_image, 0, 0, 512, 512,
+            angle = 0, interpolate = TRUE)
+
+
+gray<-noised_image[,,1]+noised_image[,,2]+noised_image[,,3]
+gray<-gray/max(gray)
+
+par(mfrow=c(1,1))
+plot(c(0, 512), c(0, 512), type = "n",main="grayscale image", xlab = "", ylab = "")
+rasterImage(gray, 0, 0, 512, 512,
+            angle = 0, interpolate = TRUE)
+
+
+noised_image<-array(0,c(512,512,3))
+
+matrix<-matrix(0,260100,9)
+
+for (i in 2:511) {
+  for(j in 2:511) {
+    matrix[510*(i-2)+j-1,1]<-gray[i-1,j-1]
+    matrix[510*(i-2)+j-1,2]<-gray[i-1,j]
+    matrix[510*(i-2)+j-1,3]<-gray[i-1,j+1]
+    matrix[510*(i-2)+j-1,4]<-gray[i,j-1]
+    matrix[510*(i-2)+j-1,5]<-gray[i,j]
+    matrix[510*(i-2)+j-1,6]<-gray[i,j+1]
+    matrix[510*(i-2)+j-1,7]<-gray[i+1,j-1]
+    matrix[510*(i-2)+j-1,8]<-gray[i+1,j]
+    matrix[510*(i-2)+j-1,9]<-gray[i+1,j+1]
+  }
+}
+dat<-matrix
+colnames(dat) <- c("Upper left","upper","upper right","middle left","central","middle right","lower left","lower","lower right")
+
+
+
+pc <- princomp(dat)
+plot(pc)
+summary(pc, loadings=T)
+# Get principal component vectors using prcomp instead of princomp
+pc = prcomp(dat,center = TRUE,scale = TRUE) 
+
+# First 9 principal components
+comp <- data.frame(pc$x[,1:9])
+
+#Results of PCA
+```
+```{r,include=FALSE,eval=TRUE}
+library(factoextra)
+```
+```{r}
+ind <- get_pca_ind(pc)
+
+# Eigenvalues
+eig.val <- get_eigenvalue(pc)
+eig.val
+fviz_eig(pc)
+
+##graph of variables
+fviz_pca_var(pc,
+             col.var = "contrib", # Color by contributions to the PC
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE     # Avoid text overlapping
+)
+
+# Results for Variables
+res.var <- get_pca_var(pc)
+
+# Results for individuals
+res.ind <- get_pca_ind(pc)
+
+# Contribution to the first dimension
+fviz_contrib(pc,choice = ("var"),axes = 1)
+# Contribution to the second dimension
+fviz_contrib(pc,choice = ("var"),axes = 2)
+
+soul_image<-pc$x[,1]
+
+new<-matrix(0,510,510)
+
+for(k in 1:510){
+  for(l in 1:510){
+    new[k,l]<-soul_image[510*(k-1)+l]
+  }
+} 
+```
+```{r,include=FALSE,eval=TRUE}
+library(RSNNS)
+```
+```{r}
+new_image<-normalizeData(new,type="0_1")
+
+
+plot(c(0, 510), c(0, 510),main="PC1 Image", type = "n", xlab = "", ylab = "")
+rasterImage(new_image, 0, 0, 510, 510,
+            angle = 0, interpolate = TRUE)
+
+
+soul_image2<-pc$x[,2]
+
+new2<-matrix(0,510,510)
+
+for(k in 1:510){
+  for(l in 1:510){
+    new2[k,l]<-soul_image2[510*(k-1)+l]
+  }
+} 
+new_image2<-normalizeData(new2,type="0_1")
+
+plot(c(0, 510), c(0, 510),main="PC2 Image", type = "n", xlab = "", ylab = "")
+rasterImage(new_image2, 0, 0, 510, 510,
+            angle = 0, interpolate = TRUE)
+
+
+soul_image3<-pc$x[,3]
+
+new3<-matrix(0,510,510)
+
+for(k in 1:510){
+  for(l in 1:510){
+    new3[k,l]<-soul_image3[510*(k-1)+l]
+  }
+} 
+new_image3<-normalizeData(new3,type="0_1")
+
+plot(c(0, 510), c(0, 510),main="PC3 Image", type = "n", xlab = "", ylab = "")
+rasterImage(new_image3, 0, 0, 510, 510,
+            angle = 0, interpolate = TRUE)
+
+par(mfrow=c(1,3))
+plot(c(0, 510), c(0, 510),main="PC1 Image", type = "n", xlab = "", ylab = "")
+rasterImage(new_image, 0, 0, 510, 510,
+            angle = 0, interpolate = TRUE)
+plot(c(0, 510), c(0, 510),main="PC2 Image", type = "n", xlab = "", ylab = "")
+rasterImage(new_image2, 0, 0, 510, 510,
+            angle = 0, interpolate = TRUE)
+plot(c(0, 510), c(0, 510),main="PC3 Image", type = "n", xlab = "", ylab = "")
+rasterImage(new_image3, 0, 0, 510, 510,
+            angle = 0, interpolate = TRUE)
+
+
+```
