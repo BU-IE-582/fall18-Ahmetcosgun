@@ -9,3 +9,6 @@
 
 ## Week 4 (October 25)
 [Here](files/Homework2.html) is my second Homework results
+
+## Week 7(November 19)
+[Here](files/Homework3.html) is my third Homework results
